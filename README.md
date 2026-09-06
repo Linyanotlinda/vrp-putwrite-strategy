@@ -20,9 +20,12 @@ $$
 - Standardizing VRP using a rolling 252-day z-score
 - Comparing subsequent PutWrite returns across VRP regimes
 - Building a timing rule using `VRP z-score > 1`
+- Lagging the signal by one trading day to avoid look-ahead bias
 - Evaluating return, volatility, Sharpe ratio, drawdown, and exposure
+- Incorporating a 3-month Treasury return on idle capital
 - Comparing against randomly timed strategies with similar exposure
 - Testing threshold sensitivity
+- Evaluating the frozen strategy on a final 30% temporal holdout sample
 - Testing performance across subperiods
 
 ## Signal Construction
@@ -84,24 +87,25 @@ and otherwise remains out of the PutWrite position.
 
 The signal is lagged by one trading day so that today's end-of-day information determines tomorrow's exposure, avoiding look-ahead bias.
 
+When the strategy is not allocated to the PutWrite index, a second implementation assumes that idle capital earns the 3-month U.S. Treasury constant-maturity rate rather than a zero return.
+
+This cash-adjusted version is evaluated alongside the original zero-cash strategy so that the effect of the idle-capital assumption can be assessed separately from the VRP timing signal.
+
 ## Performance
 
-### Continuous PutWrite Exposure
+| Strategy | Annualized Return | Annualized Volatility | Sharpe Ratio | Maximum Drawdown |
+|---|---:|---:|---:|---:|
+| Continuous PutWrite | 8.09% | 13.42% | 0.60 | -28.9% |
+| VRP-Timed PutWrite | 5.31% | 6.99% | 0.76 | -7.4% |
+| VRP-Timed PutWrite + Cash | 7.76% | 6.98% | 1.11 | -5.8% |
 
-- Annualized return: **8.09%**
-- Annualized volatility: **13.42%**
-- Sharpe ratio: **0.60**
-- Maximum drawdown: **-28.9%**
+The timing rule allocates to the PutWrite index on approximately **11.5% of trading days**.
 
-### VRP-Timed PutWrite Strategy
+Without a return on idle capital, the timed strategy produces a lower absolute return than continuous PutWrite exposure, but materially reduces volatility and maximum drawdown.
 
-- Annualized return: **5.31%**
-- Annualized volatility: **6.99%**
-- Sharpe ratio: **0.76**
-- Maximum drawdown: **-7.4%**
-- Market exposure: **11.5%**
+Including a 3-month Treasury return on idle capital raises annualized return from approximately **5.31%** to **7.76%**, while volatility remains close to **7.0%**. Under the notebook's return-to-volatility Sharpe calculation, the ratio increases from approximately **0.76** to **1.11**.
 
-The timed strategy produced lower absolute returns than continuous PutWrite exposure, but materially reduced volatility and maximum drawdown while improving risk-adjusted performance.
+This indicates that the zero-return assumption for idle capital was conservative.
 
 ## Robustness Tests
 
@@ -135,6 +139,25 @@ Results remained broadly supportive of the strategy for stricter thresholds.
 
 The main strategy retains the simple `z > 1` rule rather than selecting the highest-Sharpe threshold after observing the results.
 
+### Out-of-Sample Holdout Test
+
+The final **30%** of the historical backtest is treated as a temporal holdout sample.
+
+Before evaluating this period, the strategy specification is kept unchanged:
+
+- 21-day realized volatility
+- 252-day rolling VRP z-score
+- Entry threshold of `z > 1`
+- One-day lag between signal formation and exposure
+
+No parameters are adjusted based on holdout-period performance.
+
+In the development sample, the VRP-timed strategy improved the Sharpe ratio from approximately **0.41** for continuous PutWrite exposure to **0.77**, while substantially reducing maximum drawdown.
+
+In the holdout sample, the timing strategy continued to reduce volatility and drawdown, with maximum drawdown falling from approximately **-15.1%** to approximately **-2.7%**. However, its Sharpe ratio of approximately **0.74** was below the continuous PutWrite benchmark's approximately **1.30**.
+
+The holdout test therefore suggests that the more persistent benefit of the timing rule may be exposure and drawdown control rather than consistently superior risk-adjusted returns.
+
 ### Subperiod Analysis
 
 The sample was divided into two approximately equal subperiods.
@@ -159,9 +182,13 @@ The strategy therefore improved risk-adjusted performance and reduced drawdowns 
 
 The results suggest that unusually high volatility risk premium regimes may offer more attractive conditions for systematic option-selling exposure.
 
-The main benefit of the timing rule was not higher absolute return, but improved risk-adjusted performance and substantially lower drawdowns.
+Across the full sample, the main benefit of VRP timing is a substantial reduction in volatility and drawdown. The random same-exposure benchmark suggests that this result is not explained entirely by being invested less often.
 
-The strategy was invested on only a small fraction of trading days, so lower exposure explains part of the reduction in risk. However, the random same-exposure comparison, threshold sensitivity analysis, and subperiod analysis provide additional evidence that the VRP signal itself contains useful timing information.
+Adding a Treasury return on idle capital materially improves the economics of the strategy by allowing unallocated capital to earn a positive return rather than assuming zero return.
+
+However, the temporal holdout test shows that the strategy's Sharpe-ratio advantage is not stable across all periods. Although drawdown and volatility reduction persisted in the holdout sample, continuous PutWrite exposure achieved the higher Sharpe ratio.
+
+The evidence therefore supports VRP more strongly as a regime-selection and risk-control signal than as a consistently superior source of risk-adjusted returns.
 
 ## Limitations
 
@@ -169,9 +196,11 @@ The analysis is based on a finite historical sample, and the results remain samp
 
 The PutWrite index is used as a benchmark return series rather than reconstructing individual historical SPX option trades.
 
-When the strategy is not invested in the PutWrite index, the backtest assumes a zero return on idle capital. Incorporating a Treasury-bill or other cash return would be a natural extension.
+The cash-adjusted implementation uses the 3-month U.S. Treasury constant-maturity rate as a proxy for the return available on idle capital. It does not model transaction costs, financing frictions, or implementation costs.
 
-The results should therefore be interpreted as empirical evidence about the historical relationship between the volatility risk premium and PutWrite performance, rather than evidence of guaranteed out-of-sample profitability.
+The holdout test provides one historical out-of-sample evaluation, but it does not establish that the strategy will perform similarly in future market regimes.
+
+The results should therefore be interpreted as empirical evidence about the historical relationship between the volatility risk premium and PutWrite performance rather than evidence of guaranteed future profitability.
 
 ## Tools
 
@@ -187,8 +216,9 @@ The analysis uses:
 - S&P 500 daily prices
 - VIX daily values
 - Cboe S&P 500 PutWrite Index historical levels
+- 3-month U.S. Treasury constant-maturity rates (`DGS3MO`) for the idle-cash return
 
-Raw source files are not included in the repository.
+The source data files used in the notebook are included in this repository for reproducibility.
 
 ## Notebook
 
